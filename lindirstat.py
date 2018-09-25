@@ -1,7 +1,11 @@
+#!/bin/python3
+
 import sys
+import math
 import pygame
 import pathlib
 import functools
+from enum import Enum
 from hurry.filesize import size, alternative
 
 
@@ -189,13 +193,31 @@ def handle_events():
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             sys.exit()
-        # elif event.type == pygame.MOUSEMOTION:
-        #     print(event)
+        elif event.type == pygame.KEYDOWN:
+            if event.unicode == 'q':
+                sys.exit()
+
+
+class PathHighlighting(Enum):
+    Path = 'path'
+    PathWithDescription = 'path_with_description'
+
+
+def highlight_path(mode, pos, base_directory):
+    base_rect = base_directory.rect
+    if mode and is_pos_in_rect(pos, base_rect):
+        if mode == PathHighlighting.Path.value:
+            pygame.draw.rect(screen, pygame.Color(0, 0, 0, 255), base_rect, 2)
+
+    for index, directory in enumerate(base_directory.directories):
+        if directory.rect:
+            highlight_path(mode, pos, directory)
 
 
 def render_directory(screen, base_color, color_factor, base_directory):
     """Renders the `directory` in the `rect` with `base_color`."""
     screen.fill(base_color, base_directory.rect)
+
     for index, directory in enumerate(base_directory.directories):
         if directory.rect:
             sub_hue = pygame.Color(0, 0, 0, 0)
@@ -204,7 +226,7 @@ def render_directory(screen, base_color, color_factor, base_directory):
                 round((base_v + color_factor * sub_hue_v) / (1 + color_factor))
                 for base_v, sub_hue_v in zip(base_color, sub_hue)
             ])
-            render_directory(screen, sub_color, color_factor * 0.95, directory)
+            render_directory(screen, sub_color, color_factor * 0.99, directory)
 
 
 pygame.init()
@@ -218,17 +240,31 @@ black = 0, 0, 0
 red = 255, 0, 0
 white = pygame.Color(255, 255, 255, 255)
 
-screen = pygame.display.set_mode(window_size)
-base_directory = analyze_directory(pathlib.Path('/home'))
+directory_path = pathlib.Path(sys.argv[1])
+base_directory = analyze_directory(directory_path)
 compute_layout(base_directory, root_rect)
+
+screen = pygame.display.set_mode(window_size)
+pygame.display.set_caption(str(directory_path))
 
 clock = pygame.time.Clock()
 
 while True:
     clock.tick(30)
     handle_events()
-    render_directory(screen, white, 1.0, base_directory)
+
+    render_directory(
+        screen,
+        white,
+        1.0,
+        base_directory,
+    )
     pos = pygame.mouse.get_pos()
+    highlight_path(
+        PathHighlighting.Path.value,
+        pos,
+        base_directory,
+    )
     info_string = get_info_string_at_pos(base_directory, pos)
     if info_string:
         render_text(info_string, font, screen, pos[0], pos[1] + 20)
